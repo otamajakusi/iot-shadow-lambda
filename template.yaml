@@ -5,11 +5,16 @@ Description: >
 
   Sample SAM Template for iot-shadow-lambda
 
+Parameters:
+  BucketName:
+    Type: String
+    Description: bucket name to create
+
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
-    MemorySize: 128
+    Timeout: 15
+    MemorySize: 5312
 
 Resources:
   HelloWorldFunction:
@@ -21,22 +26,31 @@ Resources:
       Architectures:
         - x86_64
       Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+        BucketEvent:
+          Type: S3
           Properties:
-            Path: /hello
-            Method: get
+            Bucket: !Ref IoTBucket
+            Events: # https://docs.aws.amazon.com/AmazonS3/latest/userguide/notification-how-to-event-types-and-destinations.html
+              - 's3:ObjectCreated:*'
+      Policies:
+        - Statement:
+          - Sid: S3Get 
+            Effect: Allow
+            Action:
+            - s3:GetObject
+            Resource:
+            - !Sub arn:aws:s3:::${BucketName}/*
+         
+          - Sid: IoT
+            Effect: Allow
+            Action:
+            - iot:ListThings
+            - iot:GetThingShadow
+            - iot:UpdateThingShadow
+            Resource:
+            - "*"
 
-Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: "Hello World Lambda Function ARN"
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: "Implicit IAM Role created for Hello World function"
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  IoTBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
