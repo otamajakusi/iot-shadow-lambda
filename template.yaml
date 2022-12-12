@@ -29,7 +29,7 @@ Resources:
         BucketEvent:
           Type: S3
           Properties:
-            Bucket: !Ref IoTBucket
+            Bucket: !Ref IoTShadowBucket
             Events: # https://docs.aws.amazon.com/AmazonS3/latest/userguide/notification-how-to-event-types-and-destinations.html
               - 's3:ObjectCreated:*'
       Policies:
@@ -50,7 +50,7 @@ Resources:
             Resource:
             - "*"
 
-  IoTBucket:
+  IoTShadowBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref BucketName
