@@ -34,13 +34,13 @@ Resources:
               - 's3:ObjectCreated:*'
       Policies:
         - Statement:
-          - Sid: S3Get 
+          - Sid: S3Get
             Effect: Allow
             Action:
             - s3:GetObject
             Resource:
             - !Sub arn:aws:s3:::${BucketName}/*
-         
+
           - Sid: IoT
             Effect: Allow
             Action:
