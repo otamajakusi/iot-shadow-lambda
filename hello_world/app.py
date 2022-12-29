@@ -41,11 +41,9 @@ def _thing_shadow(iot_data, thing_name, bucket, key, digest):
         payload = {
             "state": {
                 "desired": {
-                    "file": {
-                        "body": {
-                            "url": f"s3://{bucket}/{key}",
-                            "hash": digest,
-                        }
+                    "s3": {
+                        "url": f"s3://{bucket}/{key}",
+                        "hash": digest,
                     }
                 }
             }
