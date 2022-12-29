@@ -39,7 +39,7 @@ Resources:
             Action:
             - s3:GetObject
             Resource:
-            - !Sub arn:aws:s3:::${BucketName}/*
+            - !Sub arn:aws:s3:::${AWS::AccountId}-${BucketName}/*
 
           - Sid: IoT
             Effect: Allow
@@ -47,10 +47,11 @@ Resources:
             - iot:ListThings
             - iot:GetThingShadow
             - iot:UpdateThingShadow
+            - iot:DescribeEndpoint
             Resource:
             - "*"
 
   IoTShadowBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref BucketName
+      BucketName: !Sub ${AWS::AccountId}-${BucketName}

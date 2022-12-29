@@ -5,10 +5,13 @@ from hashlib import sha256
 
 # import requests
 
-endpoint = "https://a15ks10d68w3hk-ats.iot.us-east-1.amazonaws.com"
+iot_client = boto3.client("iot")
+endpoint = iot_client.describe_endpoint(endpointType="iot:Data-ATS")
+endpoint_url = f"https://{endpoint['endpointAddress']}"
+iot_data_client = boto3.client("iot-data", endpoint_url=endpoint_url)
 
 
-def get_s3_object(bucket, key):
+def _get_s3_object(bucket, key):
     s3 = boto3.client("s3")
     m = sha256()
 
@@ -24,48 +27,71 @@ def get_s3_object(bucket, key):
         return m.hexdigest()
 
 
-@retry(stop_max_attempt_number=2, wait_fixed=1000)
-def _thing_shadow(iot_data, thing_name):
+def _retry_if_throttling_exception(exception):
+    return isinstance(exception, iot_data_client.exceptions.ThrottlingException)
+
+
+@retry(
+    stop_max_attempt_number=2,
+    wait_fixed=1000,
+    retry_on_exception=_retry_if_throttling_exception,
+)
+def _thing_shadow(iot_data, thing_name, bucket, key, digest):
     try:
-        return iot_data.get_thing_shadow(thingName=thing_name)
+        payload = {
+            "state": {
+                "desired": {
+                    "file": {
+                        "body": {
+                            "url": f"s3://{bucket}/{key}",
+                            "hash": digest,
+                        }
+                    }
+                }
+            }
+        }
+        iot_data.update_thing_shadow(thingName=thing_name, payload=json.dumps(payload))
     except iot_data.exceptions.ResourceNotFoundException:
         return None
 
 
 def lambda_handler(event, context):
-    iot_data = boto3.client("iot-data", endpoint_url=endpoint)
-    iot = boto3.client("iot")
     things = []
     next_token = ""
     while True:
-        # list_things = iot.list_things(nextToken=next_token, maxResults=1) # for debug
-        list_things = iot.list_things(nextToken=next_token)
+        list_things = iot_client.list_things(nextToken=next_token)
         things.extend(list_things["things"])
         next_token = list_things.get("nextToken")
         if not next_token:
             break
-    print(things)
-    for thing in things:
-        shadow = _thing_shadow(iot_data, thing["thingName"])
-        if shadow:
-            payload = shadow["payload"].read().decode("utf-8")
-            print(f'{thing["thingName"]}, {json.loads(payload)}')
 
     bucket = event["Records"][0]["s3"]["bucket"]["name"]
     key = event["Records"][0]["s3"]["object"]["key"]
-    digest = get_s3_object(bucket, key)
-    print(digest)
+    digest = _get_s3_object(bucket, key)
 
-    return {
-        "statusCode": 200,
-        "body": json.dumps(
-            {
-                "message": "hello world",
-                # "location": ip.text.replace("\n", "")
-            }
-        ),
-    }
+    for thing in things:
+        _thing_shadow(iot_data_client, thing["thingName"], bucket, key, digest)
 
 
 if __name__ == "__main__":
-    print(lambda_handler({}, {}))
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument("--bucket", help="bucket name.", required=True)
+    parser.add_argument("--key", help="key name.", required=True)
+    args = parser.parse_args()
+    lambda_handler(
+        {
+            "Records": [
+                {
+                    "s3": {
+                        "bucket": {"name": args.bucket},
+                        "object": {"key": args.key},
+                    }
+                }
+            ]
+        },
+        {},
+    )
